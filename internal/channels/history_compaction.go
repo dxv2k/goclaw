@@ -17,6 +17,7 @@ import (
 type CompactionConfig struct {
 	Threshold  int                // trigger compaction when entries exceed this (default 50)
 	KeepRecent int                // keep this many recent raw messages (default 15)
+	MaxTokens  int                // max output tokens for summarization (default 4096)
 	Provider   providers.Provider // LLM provider for summarization
 	Model      string             // model to use for summarization
 }
@@ -44,9 +45,12 @@ func (ph *PendingHistory) MaybeCompact(historyKey string, currentCount int, cfg 
 // CompactGroup performs LLM-based compaction on a pending message group.
 // Reused by both auto-compact (channel) and HTTP compact endpoint.
 // Returns the number of entries remaining after compaction.
-func CompactGroup(ctx context.Context, s store.PendingMessageStore, channelName, historyKey string, provider providers.Provider, model string, keepRecent int) (int, error) {
+func CompactGroup(ctx context.Context, s store.PendingMessageStore, channelName, historyKey string, provider providers.Provider, model string, keepRecent, maxTokens int) (int, error) {
 	if keepRecent <= 0 {
 		keepRecent = 15
+	}
+	if maxTokens <= 0 {
+		maxTokens = 4096
 	}
 
 	// Step 1: Read entries from DB
@@ -86,7 +90,7 @@ func CompactGroup(ctx context.Context, s store.PendingMessageStore, channelName,
 			Content: "Summarize these group chat messages concisely, preserving key topics, decisions, names, and important context:\n\n" + sb.String(),
 		}},
 		Model:   model,
-		Options: map[string]any{"max_tokens": 512, "temperature": 0.3},
+		Options: map[string]any{"max_tokens": maxTokens, "temperature": 0.3},
 	})
 	if err != nil {
 		return 0, fmt.Errorf("llm summarize: %w", err)
@@ -140,7 +144,7 @@ func (ph *PendingHistory) runCompaction(historyKey string, cfg *CompactionConfig
 		return
 	}
 
-	_, err = CompactGroup(ctx, ph.store, ph.channelName, historyKey, cfg.Provider, cfg.Model, cfg.KeepRecent)
+	_, err = CompactGroup(ctx, ph.store, ph.channelName, historyKey, cfg.Provider, cfg.Model, cfg.KeepRecent, cfg.MaxTokens)
 	if err != nil {
 		slog.Warn("compaction.failed", "channel", ph.channelName, "key", historyKey, "error", err)
 		return

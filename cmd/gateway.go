@@ -14,6 +14,7 @@ import (
 	"github.com/nextlevelbuilder/goclaw/internal/agent"
 	"github.com/nextlevelbuilder/goclaw/internal/bootstrap"
 	"github.com/nextlevelbuilder/goclaw/internal/bus"
+	"github.com/nextlevelbuilder/goclaw/internal/cache"
 	"github.com/nextlevelbuilder/goclaw/internal/channels"
 	"github.com/nextlevelbuilder/goclaw/internal/channels/discord"
 	"github.com/nextlevelbuilder/goclaw/internal/channels/feishu"
@@ -618,6 +619,8 @@ func runGateway() {
 	if pendingMessagesH != nil {
 		if pc := cfg.Channels.PendingCompaction; pc != nil {
 			pendingMessagesH.SetKeepRecent(pc.KeepRecent)
+			pendingMessagesH.SetMaxTokens(pc.MaxTokens)
+			pendingMessagesH.SetProviderModel(pc.Provider, pc.Model)
 		}
 		server.SetPendingMessagesHandler(pendingMessagesH)
 	}
@@ -852,7 +855,13 @@ func runGateway() {
 		webFetchTool.UpdatePolicy(updatedCfg.Tools.WebFetch.Policy, updatedCfg.Tools.WebFetch.AllowedDomains, updatedCfg.Tools.WebFetch.BlockedDomains)
 	})
 
-	go consumeInboundMessages(ctx, msgBus, agentRouter, cfg, sched, channelMgr, consumerTeamStore, quotaChecker, delegateMgr, pgStores.Sessions, pgStores.Agents)
+	// Contact collector: auto-collect user info from channels with in-memory dedup cache.
+	var contactCollector *store.ContactCollector
+	if pgStores.Contacts != nil {
+		contactCollector = store.NewContactCollector(pgStores.Contacts, cache.NewInMemoryCache[bool]())
+	}
+
+	go consumeInboundMessages(ctx, msgBus, agentRouter, cfg, sched, channelMgr, consumerTeamStore, quotaChecker, delegateMgr, pgStores.Sessions, pgStores.Agents, contactCollector)
 
 	go func() {
 		sig := <-sigCh

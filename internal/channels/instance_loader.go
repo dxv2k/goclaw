@@ -235,27 +235,46 @@ func (l *InstanceLoader) loadInstance(ctx context.Context, inst store.ChannelIns
 		base.SetType(inst.ChannelType)
 	}
 
-	// Wire pending message auto-compaction using the agent's configured provider+model.
-	if pc, ok := ch.(PendingCompactable); ok && ag != nil && l.providerReg != nil && ag.Provider != "" {
-		if p, err := l.providerReg.Get(ag.Provider); err == nil {
-			model := ag.Model
-			if model == "" {
-				model = p.DefaultModel()
-			}
-			if model != "" {
-				cc := &CompactionConfig{
-					Provider: p,
-					Model:    model,
+	// Wire pending message auto-compaction.
+	// Priority: config provider/model > agent's provider/model > fallback.
+	if pc, ok := ch.(PendingCompactable); ok && l.providerReg != nil {
+		var p providers.Provider
+		var model string
+
+		// Try config-level provider/model first.
+		if l.pendingCompactCfg != nil && l.pendingCompactCfg.Provider != "" {
+			if cp, err := l.providerReg.Get(l.pendingCompactCfg.Provider); err == nil {
+				p = cp
+				model = l.pendingCompactCfg.Model
+				if model == "" {
+					model = cp.DefaultModel()
 				}
-				// Apply global threshold/keepRecent from config if set.
-				if l.pendingCompactCfg != nil {
-					cc.Threshold = l.pendingCompactCfg.Threshold
-					cc.KeepRecent = l.pendingCompactCfg.KeepRecent
-				}
-				pc.SetPendingCompaction(cc)
-				slog.Debug("pending compaction configured", "channel", inst.Name, "provider", ag.Provider, "model", model,
-					"threshold", cc.Threshold, "keep_recent", cc.KeepRecent)
 			}
+		}
+		// Fallback: agent's provider/model.
+		if p == nil && ag != nil && ag.Provider != "" {
+			if ap, err := l.providerReg.Get(ag.Provider); err == nil {
+				p = ap
+				model = ag.Model
+				if model == "" {
+					model = ap.DefaultModel()
+				}
+			}
+		}
+
+		if p != nil && model != "" {
+			cc := &CompactionConfig{
+				Provider: p,
+				Model:    model,
+			}
+			if l.pendingCompactCfg != nil {
+				cc.Threshold = l.pendingCompactCfg.Threshold
+				cc.KeepRecent = l.pendingCompactCfg.KeepRecent
+				cc.MaxTokens = l.pendingCompactCfg.MaxTokens
+			}
+			pc.SetPendingCompaction(cc)
+			slog.Debug("pending compaction configured", "channel", inst.Name, "provider", p.Name(), "model", model,
+				"threshold", cc.Threshold, "keep_recent", cc.KeepRecent, "max_tokens", cc.MaxTokens)
 		}
 	}
 	l.manager.RegisterChannel(inst.Name, ch)

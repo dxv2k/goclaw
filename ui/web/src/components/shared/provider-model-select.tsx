@@ -34,6 +34,8 @@ interface ProviderModelSelectProps {
   savedModel?: string;
   /** Called when verification status changes. True = save should be blocked (changed but not verified). */
   onSaveBlockedChange?: (blocked: boolean) => void;
+  /** When true, skip auto-selecting the first provider when none is set. Useful when empty means "use default". */
+  allowEmpty?: boolean;
 }
 
 export function ProviderModelSelect({
@@ -51,17 +53,18 @@ export function ProviderModelSelect({
   savedProvider,
   savedModel,
   onSaveBlockedChange,
+  allowEmpty,
 }: ProviderModelSelectProps) {
   const { t } = useTranslation("common");
   const { providers } = useProviders();
   const enabledProviders = providers.filter((p) => p.enabled);
 
-  // Auto-select first enabled provider when none is set
+  // Auto-select first enabled provider when none is set (unless allowEmpty)
   useEffect(() => {
-    if (!provider && enabledProviders.length > 0) {
+    if (!allowEmpty && !provider && enabledProviders.length > 0) {
       onProviderChange(enabledProviders[0]!.name);
     }
-  }, [provider, enabledProviders, onProviderChange]);
+  }, [allowEmpty, provider, enabledProviders, onProviderChange]);
 
   const selectedProvider = useMemo(
     () => enabledProviders.find((p) => p.name === provider),
