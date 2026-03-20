@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Upload, CheckCircle2, XCircle, Loader2, X } from "lucide-react";
+import { uniqueId } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -46,7 +47,7 @@ export function SkillUploadDialog({ open, onOpenChange, onUpload }: SkillUploadD
     if (fresh.length === 0) return;
 
     const pending: FileEntry[] = fresh.map((f) => ({
-      id: crypto.randomUUID(),
+      id: uniqueId(),
       file: f,
       status: "validating" as const,
     }));
