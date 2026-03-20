@@ -21,6 +21,7 @@ services:
       args:
         ENABLE_OTEL: "false"
         ENABLE_PYTHON: "true"
+        ENABLE_NODE: "true"
     ports:
       - "${GOCLAW_PORT:-18790}:18790"
     env_file:
