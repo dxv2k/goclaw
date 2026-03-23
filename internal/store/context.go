@@ -125,6 +125,21 @@ func MemoryUserID(ctx context.Context) string {
 	return UserIDFromContext(ctx)
 }
 
+// PropagateContext copies all GoClaw context values from src into dst.
+// Used to detach a run from the WS request context while preserving store values.
+func PropagateContext(dst, src context.Context) context.Context {
+	allKeys := []contextKey{
+		UserIDKey, AgentIDKey, AgentTypeKey, SenderIDKey,
+		SelfEvolveKey, LocaleKey, SharedMemoryKey, ShellDenyGroupsKey,
+	}
+	for _, k := range allKeys {
+		if v := src.Value(k); v != nil {
+			dst = context.WithValue(dst, k, v)
+		}
+	}
+	return dst
+}
+
 // WithLocale returns a new context with the given locale.
 func WithLocale(ctx context.Context, locale string) context.Context {
 	return context.WithValue(ctx, LocaleKey, locale)
